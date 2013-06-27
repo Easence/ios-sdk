@@ -2,8 +2,8 @@
 //  QiniuViewController.m
 //  QiniuDemo
 //
-//  Created by Hugh Lv on 12-11-14.
-//  Copyright (c) 2012年 Shanghai Qiniu Information Technologies Co., Ltd. All rights reserved.
+//  Created by Qiniu Developers on 12-11-14.
+//  Copyright (c) 2012 Shanghai Qiniu Information Technologies Co., Ltd. All rights reserved.
 //
 
 #import <MobileCoreServices/UTCoreTypes.h>
@@ -11,6 +11,7 @@
 #import "QiniuViewController.h"
 #import "QiniuAuthPolicy.h"
 #import "../../QiniuSDK/QiniuSimpleUploader.h"
+#import "../../QiniuSDK/QiniuResumableUploader.h"
 
 // NOTE: Please replace with your own accessKey/secretKey.
 // You can find your keys on https://dev.qiniutek.com/ ,
@@ -47,8 +48,11 @@
     [_uploadButton release];
     [_customPopoverController release];
     
-    [_uploader release];
+    [_simpleUploader release];
+    [_resumableUploader release];
+    [_key release];
 
+    [_uploadMode release];
     [super dealloc];
 }
 - (void)viewDidUnload {
@@ -56,7 +60,13 @@
     [self setProgressBar:nil];
     [self setUploadStatus:nil];
     [self setUploadButton:nil];
-    _uploader.delegate = nil;
+    if (_simpleUploader) {
+        _simpleUploader.delegate = nil;
+    }
+    if (_resumableUploader) {
+        _resumableUploader.delegate = nil;
+    }
+    [self setUploadMode:nil];
     [super viewDidUnload];
 }
 - (IBAction)uploadButtonPressed:(id)sender {
@@ -102,7 +112,7 @@
     [self.progressBar setNeedsDisplay];
     
     NSString *message = [NSString stringWithFormat:@"Progress of uploading %@ is: %.2f%%",  filePath, percent * 100];
-    NSLog(@"%@", message);
+    //NSLog(@"%@", message);
     
     [self.uploadStatus setText:message];
 }
@@ -110,7 +120,15 @@
 // Upload completed successfully.
 - (void)uploadSucceeded:(NSString *)filePath hash:(NSString *)hash
 {
-    NSString *message = [NSString stringWithFormat:@"Successfully uploaded %@ with hash: %@",  filePath, hash];
+    long long fileSize = [[[[NSFileManager defaultManager] attributesOfItemAtPath:filePath error:nil] objectForKey:NSFileSize] longLongValue];
+    int speed = 0;
+    if (fileSize > 0) {
+        NSTimeInterval uploadTime = [[NSDate date] timeIntervalSince1970] - _uploadStartTime;
+        speed = fileSize / uploadTime;
+    }
+    
+    NSMutableString *message = [NSMutableString stringWithFormat:@"Successfully uploaded %@ \n Hash: %@ \n File size: %lld \n Speed: %d bytes/sec \n URL: http://%@.qiniudn.com/%@",  filePath, hash, fileSize, speed, kBucketName, _key];
+    
     NSLog(@"%@", message);
     
     [self.uploadStatus setText:message];
@@ -157,12 +175,16 @@
     NSString *mediaType = [theInfo objectForKey:UIImagePickerControllerMediaType];
     if ([mediaType isEqualToString:(NSString *)kUTTypeImage] || [mediaType isEqualToString:(NSString *)ALAssetTypePhoto]) {
         
-        NSString *key = [NSString stringWithFormat:@"%@%@", timeDesc, @".jpg"];
+        NSString *key = [NSString stringWithFormat:@"%@.jpg", timeDesc];
         NSString *filePath = [NSTemporaryDirectory() stringByAppendingPathComponent:key];
         NSLog(@"Upload Path: %@", filePath);
         
         NSData *webData = UIImageJPEGRepresentation([theInfo objectForKey:UIImagePickerControllerOriginalImage], 1);
         [webData writeToFile:filePath atomically:YES];
+        
+        _key = [key copy];
+        
+        _uploadStartTime = [[NSDate date] timeIntervalSince1970];
         
         [self uploadFile:filePath bucket:kBucketName key:key];
     }
@@ -185,13 +207,26 @@
     
     if ([manager fileExistsAtPath:filePath]) {
         
-        if (_uploader) {
-            [_uploader release];
+        if (_simpleUploader) {
+            [_simpleUploader release];
+            _simpleUploader = nil;
         }
-        _uploader = [[QiniuSimpleUploader uploaderWithToken:[self tokenWithScope:bucket]] retain];
-        _uploader.delegate = self;
+        if (_resumableUploader) {
+            [_resumableUploader release];
+            _resumableUploader = nil;
+        }
         
-        [_uploader upload:filePath bucket:bucket key:key extraParams:nil];
+        if ([self.uploadMode selectedSegmentIndex] == 0) {
+            _simpleUploader = [[QiniuSimpleUploader alloc] initWithToken:[self tokenWithScope:bucket]];
+            _simpleUploader.delegate = self;
+            
+            [_simpleUploader upload:filePath bucket:bucket key:key extraParams:nil];
+        } else { // Resumable
+            _resumableUploader = [[QiniuResumableUploader alloc] initWithToken:[self tokenWithScope:bucket]];
+            _resumableUploader.delegate = self;
+            
+            [_resumableUploader upload:filePath bucket:bucket key:key extraParams:nil];
+        }
     }
 }
 

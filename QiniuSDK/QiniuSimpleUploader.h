@@ -8,26 +8,27 @@
 
 #import <Foundation/Foundation.h>
 #import "QiniuUploadDelegate.h"
+#import "QiniuUploader.h"
 #import "ASIHTTPRequest/ASIFormDataRequest.h"
-
-// Following are the legal keys for extraParams field.
-
-#define kMimeTypeKey @"mimeType"
-#define kCustomMetaKey @"customMeta"
-#define kCrc32Key @"crc32"
-#define kRotateKey @"rotate"
-#define kCallbackParamsKey @"callbackParams"
 
 // Upload local file to Qiniu Cloud Service with one single request.
 //
 // This class is proper for uploading medium to small files (< 4MB)。
 // 
-@interface QiniuSimpleUploader : NSObject<ASIHTTPRequestDelegate, ASIProgressDelegate> {
+@interface QiniuSimpleUploader : NSObject<QiniuUploader, ASIHTTPRequestDelegate, ASIProgressDelegate> {
 @private
     NSString *_token;
+    NSString *_filePath;
+    NSString *_bucket;
+    NSString *_key;
+    long long _fileSize;
+    
     long long _sentBytes;
     ASIFormDataRequest *_request;
 }
+
+// Delegates to receive events for upload progress info.
+@property (assign, nonatomic) id<QiniuUploadDelegate> delegate;
 
 // @brief Token.
 //
@@ -35,33 +36,10 @@
 // If that happens you'll need to retrieve a new token from server and set here.
 @property (copy, nonatomic) NSString *token;
 
-// Delegates to receive events for upload progress info.
-@property (assign, nonatomic) id<QiniuUploadDelegate> delegate;
-
 // Returns a QiniuSimpleUploader instance. Auto-released.
 //
 // If you want to keep the instance for more than one message cycle, please use retain.
 //
 + (id) uploaderWithToken:(NSString *)token;
-
-// @brief Upload a local file.
-//
-// Before calling this function, you need to make sure the corresponding bucket has been created.
-// You can make bucket on management console: http://dev.qiniutek.com/ .
-//
-// Parameter extraParams is for extensibility purpose. It could contain following key-value pair:
-//      Key:mimeType Value:NSString *<Custom mime type> -- E.g. "text/plain"
-//          This is optional since server side can automatically determine the mime type. 
-//      Key:customMeta Value:NSString *<Custom meta info> -- For notes purpose.
-//          Please refer to http://docs.qiniutek.com/v3/api/words/#CustomMeta
-//      Key:crc32 Value:NSString *<CRC32> -- 10-digits CRC value.
-//          Please refer to http://docs.qiniutek.com/v3/api/words/#FileCRC32Checksum
-//      Key:callbackParams Value:NSDictionary *<Callback Params>
-//          Please refer to http://docs.qiniutek.com/v3/api/io/#callback-after-uploaded
-//          To use this feature, you also need to retrieve a corresponding token with appropriate authpolicy.
-- (void) upload:(NSString *)filePath
-         bucket:(NSString *)bucket
-            key:(NSString *)key
-    extraParams:(NSDictionary *)extraParams;
 
 @end

@@ -8,6 +8,7 @@
 
 #import "QiniuSDKTests.h"
 #import "QiniuSimpleUploader.h"
+#import "QiniuResumableUploader.h"
 #import "QiniuAuthPolicy.h"
 #import "QiniuConfig.h"
 #import <zlib.h>
@@ -25,13 +26,15 @@
 // You can create a new bucket on https://dev.qiniutek.com/ .
 #define kBucketName @"<Please specify your bucket name>"
 
+#define kWaitTime 10 // seconds
+
 @implementation QiniuSDKTests
 
 - (void)setUp
 {
     [super setUp];
     
-    _filePath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"test.png"];
+    _filePath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"test1.png"];
     NSLog(@"Test file: %@", _filePath);
     
     // Download a file and save to local path.
@@ -39,7 +42,7 @@
     NSFileManager *fileManager = [NSFileManager defaultManager];
     if (![fileManager fileExistsAtPath:_filePath])
     {
-        NSURL *url = [NSURL URLWithString:@"http://dizorb.com/wp-content/uploads/2010/02/Golden-Dream_Dizorb_dot_com.jpg"];
+        NSURL *url = [NSURL URLWithString:@"http://qiniuphotos.qiniudn.com/gogopher.jpg"];
         NSData *data = [NSData dataWithContentsOfURL:url];
         
         [data writeToFile:_filePath atomically:TRUE];
@@ -191,5 +194,34 @@
     }
 }
 
+// Test case: Resumlable upload.
+- (void) testResumableUpload1
+{
+    QiniuResumableUploader *uploader = [[QiniuResumableUploader alloc] initWithToken:_token];
+    uploader.delegate = self;
+
+    NSDateFormatter *formatter = [[NSDateFormatter new] autorelease];
+    [formatter setDateFormat: @"yyyy-MM-dd-HH-mm-ss"];
+    
+    NSString *timeDesc = [formatter stringFromDate:[NSDate date]];
+    
+    [uploader upload:_filePath bucket:kBucketName key:[NSString stringWithFormat:@"test-%@.png", timeDesc] extraParams:nil];
+    
+    NSLog(@"File: http://<bucketbind>.qiniudn.com/test-%@.png", timeDesc);
+    
+    int waitLoop = 0;
+    while (!_done && waitLoop < kWaitTime) // Wait for 10 seconds.
+    {
+        waitLoop++;
+        NSLog(@"Waiting for the result... %d", waitLoop);
+        [NSThread sleepForTimeInterval:1];
+    }
+    
+    if (waitLoop == kWaitTime) {
+        STFail(@"Failed to receive expected delegate messages.");
+    }
+    
+    [uploader release];
+}
 
 @end
