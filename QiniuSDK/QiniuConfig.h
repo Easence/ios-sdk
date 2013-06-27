@@ -8,7 +8,7 @@
 
 #import <Foundation/Foundation.h>
 
-#define kUpHost @"http://up.qbox.me"
+#define kUpHost @"http://up.qiniu.com"
 
 #define kBlockSize (4 * 1024 * 1024)  // 4MB
 #define kChunkSize (128 * 1024) // 128KB

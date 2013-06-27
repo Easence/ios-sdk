@@ -16,8 +16,11 @@
 
 @property (retain, nonatomic) NSString *scope;
 @property (retain, nonatomic) NSString *callbackUrl;
-@property (retain, nonatomic) NSString *callbackBodyType;
-@property (retain, nonatomic) NSString *customer;
+@property (retain, nonatomic) NSString *callbackBody;
+@property (retain, nonatomic) NSString *returnUrl;
+@property (retain, nonatomic) NSString *returnBody;
+@property (retain, nonatomic) NSString *asyncOps;
+@property (retain, nonatomic) NSString *endUser;
 @property int expires;
 @property int escape;
 

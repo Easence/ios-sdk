@@ -19,10 +19,7 @@
 @private
     NSString *_token;
     NSString *_filePath;
-    NSString *_bucket;
-    NSString *_key;
     long long _fileSize;
-    
     long long _sentBytes;
     ASIFormDataRequest *_request;
 }

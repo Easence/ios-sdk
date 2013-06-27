@@ -13,54 +13,11 @@
 #import "GTMBase64/GTMBase64.h"
 #import "JSONKit/JSONKit.h"
 
-#define kFilePathKey @"filePath"
-#define kHashKey @"hash"
-#define kExtraParamsKey @"extraParams"
-
-
-NSString *prepareExtraParamsString(NSDictionary *extraParams) {
-    
-    NSMutableString *params = [NSMutableString string];
-    
-    NSObject *mimeTypeObj = [extraParams objectForKey:kMimeTypeKey];
-    if (mimeTypeObj) {
-        [params appendString:@"/mimeType/"];
-        [params appendString:urlsafeBase64String((NSString *)mimeTypeObj)];
-    }
-    
-    NSObject *customMetaObj = [extraParams objectForKey:kCustomMetaKey];
-    if (customMetaObj) {
-        [params appendString:@"/meta/"];
-        [params appendString:urlsafeBase64String((NSString *)customMetaObj)];
-    }
-    
-    NSObject *crc32Obj = [extraParams objectForKey:kCrc32Key];
-    if (crc32Obj) {
-        [params appendString:@"/crc32/"];
-        [params appendString:(NSString *)crc32Obj];
-    }
-    
-    NSObject *customerObj = [extraParams objectForKey:kCustomerKey];
-    if (customerObj) {
-        [params appendString:@"/customer/"];
-        [params appendString:(NSString *)customerObj];
-    }
-    
-    NSObject *rotateObj = [extraParams objectForKey:kRotateKey];
-    if (rotateObj) {
-        [params appendString:@"/rotate/"];
-        [params appendString:(NSString *)rotateObj];
-    }
-    
-    return params;
-}
-
+#define kUndefinedKey @"?"
 
 // ------------------------------------------------------------------------------------------
 
 @implementation QiniuSimpleUploader
-
-//@synthesize delegate;
 
 + (id) uploaderWithToken:(NSString *)token {
     return [[[self alloc] initWithToken:token] autorelease];
@@ -89,7 +46,6 @@ NSString *prepareExtraParamsString(NSDictionary *extraParams) {
         [_request release];
     }
     [_filePath  release];
-    [_key release];
     [super dealloc];
 }
 
@@ -104,10 +60,9 @@ NSString *prepareExtraParamsString(NSDictionary *extraParams) {
     return _token;
 }
 
-- (void) upload:(NSString *)filePath
-         bucket:(NSString *)bucket
-            key:(NSString *)key
-    extraParams:(NSDictionary *)extraParams
+- (void) uploadFile:(NSString *)filePath
+                key:(NSString *)key
+        extraParams:(NSDictionary *)extraParams
 {
     // If upload is called multiple times, we should cancel previous procedure.
     if (_request) {
@@ -120,46 +75,41 @@ NSString *prepareExtraParamsString(NSDictionary *extraParams) {
     }
     _filePath = [filePath copy];
     
-    if (_bucket) {
-        [_bucket release];
+    // progress
+    NSError *error = nil;
+    _fileSize = [[[NSFileManager defaultManager] attributesOfItemAtPath:filePath error:&error] fileSize];
+    if (error != nil) {
+        [self reportFailure:nil];
     }
-    _bucket = [bucket copy];
+    _sentBytes = 0;
     
-    if (_key) {
-        [_key release];
-    }
-    _key = [key copy];
-    
-    NSString *url = [NSString stringWithFormat:@"%@/upload", kUpHost];
-    
-    NSString *encodedEntry = urlsafeBase64String([NSString stringWithFormat:@"%@:%@", bucket, key]);
-
-    // Prepare POST body fields.
-    NSMutableString *action = [NSMutableString stringWithFormat:@"/rs-put/%@", encodedEntry];
-    
-    // All of following fields are optional.
-    if (extraParams) {
-        [action appendString:prepareExtraParamsString(extraParams)];
-    }
-    
-    _request = [[ASIFormDataRequest alloc] initWithURL:[NSURL URLWithString:url]];
+    _request = [[ASIFormDataRequest alloc] initWithURL:[NSURL URLWithString:kUpHost]];
     _request.delegate = self;
     _request.uploadProgressDelegate = self;
     
-    [_request addPostValue:action forKey:@"action"];
-    [_request addFile:filePath forKey:@"file"];
-    
-    if (_token) {
-        [_request addPostValue:_token forKey:@"auth"];
+    [_request addPostValue:_token forKey:@"token"];
+    if (![key isEqualToString:kUndefinedKey]) {
+        [_request addPostValue:key forKey:@"key"];
     }
-    
+    NSString *mimeType = nil;
     if (extraParams) {
-        NSObject *callbackParamsObj = [extraParams objectForKey:kCallbackParamsKey];
-        if (callbackParamsObj != nil) {
-            NSDictionary *callbackParams = (NSDictionary *)callbackParamsObj;
-            
-            [_request addPostValue:urlParamsString(callbackParams) forKey:@"params"];
+        // crc32
+        NSString *crc32 = [extraParams objectForKey:kCrc32Key];
+        if (crc32 != nil) {
+            [_request addPostValue: crc32 forKey:kCrc32Key];
         }
+        // mimeType
+        mimeType = [extraParams objectForKey:kMimeTypeKey];
+        // user customized arguments
+        NSDictionary *params = [extraParams objectForKey:kUserParams];
+        for (NSString *key in params) {
+            [_request addPostValue:[params objectForKey:key] forKey:key];
+        }
+    }
+    if (mimeType != nil) {
+        [_request addFile:filePath withFileName:filePath andContentType:mimeType forKey:@"file"];
+    } else {
+        [_request addFile:filePath forKey:@"file"];
     }
     
     [_request startAsynchronous];
@@ -189,25 +139,17 @@ NSString *prepareExtraParamsString(NSDictionary *extraParams) {
     }
     
     int statusCode = [request responseStatusCode];
-    if (statusCode / 100 == 2) { // Success!
-        
+    if (statusCode == 200) { // Success!
         if (self.delegate && [self.delegate respondsToSelector:@selector(uploadProgressUpdated:percent:)]) {
             [self.delegate uploadProgressUpdated:_filePath
                                          percent:1.0]; // Ensure a 100% progress message is sent.
         }
-            
-        if (self.delegate && [self.delegate respondsToSelector:@selector(uploadSucceeded:hash:)]) {
+        if (self.delegate && [self.delegate respondsToSelector:@selector(uploadSucceeded:ret:)]) {
             NSString *responseString = [request responseString];
-            NSString *hash = nil;
             if (responseString) {
                 NSDictionary *dic = [responseString objectFromJSONString];
-                
-                NSObject *hashObj = [dic objectForKey:kHashKey];
-                if (hashObj) {
-                    hash = (NSString *)hashObj;
-                }
+                [self.delegate uploadSucceeded:_filePath ret:dic];
             }
-            [self.delegate uploadSucceeded:_filePath hash:hash]; // No matter hash is nil or not, send this event.
         }
     } else { // Server returns an error code.
         [self reportFailure:request];

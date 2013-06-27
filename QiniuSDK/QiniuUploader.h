@@ -8,6 +8,11 @@
 
 #import <Foundation/Foundation.h>
 
+// keys for extraParams field.
+#define kMimeTypeKey @"mimeType"
+#define kCrc32Key @"crc32"
+#define kUserParams @"params"
+
 @protocol QiniuUploader <NSObject>
 
 @required
@@ -17,34 +22,18 @@
 // @brief Upload a local file.
 //
 // Before calling this function, you need to make sure the corresponding bucket has been created.
-// You can make bucket on management console: http://dev.qiniutek.com/ .
+// You can make bucket on management console: https://portal.qiniu.com .
 //
-// Parameter extraParams is for extensibility purpose. It could contain following key-value pair:
-//      Key:mimeType Value:NSString *<Custom mime type> -- E.g. "text/plain"
-//          This is optional since server side can automatically determine the mime type.
-//      Key:customMeta Value:NSString *<Custom meta info> -- For notes purpose.
-//          Please refer to http://docs.qiniutek.com/v3/api/words/#CustomMeta
+// Parameter extraParams is for extensibility purpose, it is optional.
+// It could contain following key-value pair:
+//      Key:mimeType Value:NSString *<Custom mimeType> -- E.g. "text/plain"
+//          specify mimeType, or server side automatically determine the mimeType.
 //      Key:crc32 Value:NSString *<CRC32> -- 10-digits CRC value.
-//          Please refer to http://docs.qiniutek.com/v3/api/words/#FileCRC32Checksum
-//      Key:callbackParams Value:NSDictionary *<Callback Params>
-//          Please refer to http://docs.qiniutek.com/v3/api/io/#callback-after-uploaded
-//          To use this feature, you also need to retrieve a corresponding token with appropriate authpolicy.
-- (void) upload:(NSString *)filePath
-         bucket:(NSString *)bucket
-            key:(NSString *)key
-    extraParams:(NSDictionary *)extraParams;
+//          specify file's crc32 value, server side will check it for file's integrity.
+//      Key:params Value:NSDictionary *<User Custom Params>
+//          Please refer to http://docs.qiniu.com/api/put.html#xVariables
+- (void) uploadFile:(NSString *)filePath
+                key:(NSString *)key
+        extraParams:(NSDictionary *)extraParams;
 
 @end
-
-// Following are the legal keys for extraParams field.
-
-#define kMimeTypeKey @"mimeType"
-#define kCustomMetaKey @"customMeta"
-#define kCrc32Key @"crc32"
-#define kCustomerKey @"customer"
-#define kRotateKey @"rotate"
-#define kCallbackParamsKey @"callbackParams"
-
-// @brief Convert the extramParams from NSDictionary to a url-safe string.
-//
-NSString *prepareExtraParamsString(NSDictionary *extraParams);

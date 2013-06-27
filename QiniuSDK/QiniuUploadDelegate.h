@@ -25,7 +25,7 @@
 @required
 
 // Upload completed successfully.
-- (void)uploadSucceeded:(NSString *)filePath hash:(NSString *)hash;
+- (void)uploadSucceeded:(NSString *)filePath ret:(NSDictionary *)ret;
 
 // Upload failed.
 - (void)uploadFailed:(NSString *)filePath error:(NSError *)error;

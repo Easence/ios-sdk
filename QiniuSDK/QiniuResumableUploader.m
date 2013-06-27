@@ -13,8 +13,6 @@
 #import "GTMBase64/GTMBase64.h"
 #import "JSONKit/JSONKit.h"
 
-#define kHashKey @"hash"
-
 @implementation QiniuResumableUploader
 
 + (id) uploaderWithToken:(NSString *)token
@@ -85,9 +83,7 @@
 
 - (void)setToken:(NSString *)token
 {
-    if (_token) {
-        [_token release];
-    }
+    [_token autorelease];
     _token = [token copy];
 }
 
@@ -108,14 +104,18 @@
 
     // All of following fields are optional.
     if (_extraParams) {
-        [url appendString:prepareExtraParamsString(_extraParams)];
+        NSObject *mimeTypeObj = [_extraParams objectForKey:kMimeTypeKey];
+        if (mimeTypeObj) {
+            [url appendString:@"/mimeType/"];
+            [url appendString:urlsafeBase64String((NSString *)mimeTypeObj)];
+        }
         
         NSObject *paramsObj = [_extraParams objectForKey:@"params"];
         if (paramsObj) {
             [url appendString:@"/params/"];
             [url appendString:urlsafeBase64String(urlParamsString((NSDictionary *)paramsObj))];
         }
-    }    
+    }
     _request = [[ASIHTTPRequest alloc] initWithURL:[NSURL URLWithString:url]];
     _request.delegate = self;
     
@@ -148,17 +148,10 @@
     }
     
     int statusCode = [request responseStatusCode];
-    if (statusCode / 100 == 2) {
-        //
+    if (statusCode == 200) {
         NSString *responseString = [request responseString];
         NSDictionary *dic = [responseString objectFromJSONString];
-        if (dic) {
-            NSObject *hashObj = [dic objectForKey:kHashKey];
-            if (hashObj) {
-                [self.delegate uploadSucceeded:_filePath hash:(NSString *)hashObj];
-            }
-        }
-        
+        [self.delegate uploadSucceeded:_filePath ret:dic];
     } else { // Non-2XX are treated as failure.
         if (++_retriedTimes <= kRetryTimes) {
             [self makeFile];
@@ -237,11 +230,11 @@
 
 // ------------------------------------------------------------------------------------
 
-- (void) upload:(NSString *)filePath
-         bucket:(NSString *)bucket
-            key:(NSString *)key
-    extraParams:(NSDictionary *)extraParams {
-    
+- (void) uploadFile:(NSString *)filePath
+                key:(NSString *)key
+        extraParams:(NSDictionary *)extraParams
+{
+    NSString* bucket = [extraParams objectForKey:@"bucket"];
     if (!filePath || !bucket || !key) {
         [self.delegate uploadFailed:_filePath error:prepareSimpleError(400, @"Invalid argument")];
         return;

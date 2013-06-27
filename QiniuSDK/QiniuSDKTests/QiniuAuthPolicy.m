@@ -15,8 +15,11 @@
 
 @synthesize scope;
 @synthesize callbackUrl;
-@synthesize callbackBodyType;
-@synthesize customer;
+@synthesize callbackBody;
+@synthesize returnUrl;
+@synthesize returnBody;
+@synthesize asyncOps;
+@synthesize endUser;
 @synthesize expires;
 @synthesize escape;
 
@@ -63,11 +66,17 @@
     if (self.callbackUrl) {
         [dic setObject:self.callbackUrl forKey:@"callbackUrl"];
     }
-    if (self.callbackBodyType) {
-        [dic setObject:self.callbackBodyType forKey:@"callbackBodyType"];
+    if (self.callbackBody) {
+        [dic setObject:self.callbackBody forKey:@"callbackBody"];
     }
-    if (self.customer) {
-        [dic setObject:self.customer forKey:@"customer"];
+    if (self.returnUrl) {
+        [dic setObject:self.returnUrl forKey:@"returnUrl"];
+    }
+    if (self.returnBody) {
+        [dic setObject:self.returnBody forKey:@"returnBody"];
+    }
+    if (self.endUser) {
+        [dic setObject:self.endUser forKey:@"endUser"];
     }
     
     [dic setObject:deadlineNumber forKey:@"deadline"];
